@@ -1,2 +1,3 @@
 lib/venv
 lib/__pycache__
+lib/test_files/__pycache__
