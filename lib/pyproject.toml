@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "lib"
+version = "0.1.0"
+description = "Library of utility functions, classdefs"
+authors = ["Your Name <you@example.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+pandas = "^2.2.2"
+numpy = "^1.26.4"
+scipy = "^1.13.1"
+pulp = "^2.8.0"
+matplotlib = "^3.9.0"
+seaborn = "^0.13.2"
+pydantic = "^2.7.2"
+rich = "^13.7.1"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
