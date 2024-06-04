@@ -18,7 +18,7 @@ import seaborn as sns
 
 
 # Assuming FoodDatabase.csv is in the same directory as your Jupyter Notebook
-file_path = 'FoodDatabase.csv'
+file_path = '../FoodDatabase.csv'
 #All numbers (macros and micros) in the table are a serving of 100g
 #When adding new foods to the csv, must fill in: protein / kg column, protein quality column (1 or 0), and product name column.
 
@@ -218,7 +218,7 @@ fiber_lbound = 30  # lower bound for fiber
 fiber_ubound = 60  # upper bound for fiber
 fat_lbound = 0.25*maintenance_calories/9
 fat_ubound = 0.35*maintenance_calories/9 #not really necessary, but why not, carbs provide more energy anyway
-net_carb_minimum = maintenance_calories-(protein_minimum*4+fat_ubound*9)  # set net carb minimum
+net_carb_minimum = (maintenance_calories-(protein_minimum*4+fat_ubound*9))/4  # set net carb minimum
 protein_quality_minimum = 0.4  # this is a fraction ie 0.4 = 40%
 sugar_maximum = 75
 sat_fat_maximum = 0.5  # this is a fraction
@@ -299,6 +299,15 @@ for constraint in micro_constraints:
 
 # Solve the optimization problem
 status = maintenance_model.solve()
+
+# Create an empty DataFrame to store the results
+results_df = pd.DataFrame(columns=['Food Name', 'Quantity (g)', 'Category', 'is Pill'])
+
+# Collect the data for the DataFrame
+results_list = [{'Food Name': name_per_food[i-1], 'Category': category_per_food[i-1],'is Pill': is_pill_per_food[i-1], 'Quantity (g)': int(round(var.value(), 0))} for i, var in x.items() if var.value() > 0]
+
+# Convert the list to a DataFrame and sort
+results_df = pd.DataFrame(results_list).sort_values(by='Quantity (g)', ascending=False)
 
 # Calculate the cost for each food type and add it as a new column
 results_df['Cost ($)'] = 0.0  # Initialize the column
