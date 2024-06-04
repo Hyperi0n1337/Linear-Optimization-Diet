@@ -3,6 +3,7 @@
 ## Build
 
 Build jupyter
+
 For the moment, from project folder directory, run
 ``` sh
 python -m venv venv
