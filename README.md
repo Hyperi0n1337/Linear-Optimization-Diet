@@ -3,9 +3,19 @@
 ## Build
 
 Build jupyter
+For the moment, from project folder directory, run
 ``` sh
-Whatever is valid instructions
+python -m venv venv
 ```
+then to activate virtual environment:
+``` sh
+venv\Scripts\activate
+```
+To install the necessary dependencies to the environment, run
+``` sh
+pip install -r requirements.txt --no-cache-dir
+```
+Then open jupyter in editor of choice, run the cells, they should work.
 
 Build Lib
 
