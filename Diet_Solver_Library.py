@@ -1,4 +1,5 @@
 
+import warnings
 import pandas as pd
 import numpy as np
 import scipy as sp
@@ -13,7 +14,8 @@ import os
 # Now you can import the create_athlete function
 from athlete_manager import create_athlete, get_athlete
 
-
+# Ignore pandas SettingWithCopyWarning
+warnings.simplefilter(action='ignore', category=pd.errors.SettingWithCopyWarning)
 
 # Function to set up and solve the maintenance model for a given athlete
 def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
@@ -404,6 +406,192 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
             print(f"{name_with_spaces.ljust(55)}\t{lhs_value_rounded}\t{operator}\t{rhs_value_rounded},\t{constraint_value_rounded}")
         else:
             print(f"{name_with_spaces.ljust(55)}\t{lhs_value_rounded}\t{operator}\t{rhs_value_rounded}")
+
+    # Create a new DataFrame to store the calculated values
+    results_calculated = pd.DataFrame()
+
+    # Loop through the results list and perform the calculations
+    for result in results_list:
+        product_name = result['Food Name']
+        quantity = result['Quantity (g)']
+        
+        # Find the corresponding row in df_filtered
+        matched_row = df_filtered[df_filtered['Product Name'] == product_name].copy()
+        
+        # Calculate 'Cost ($)'
+        if matched_row['is Pill'].values[0] == 1:
+            matched_row['Cost ($)'] = (quantity / 100) * matched_row['Price / kg']
+            matched_row['Quantity (g)'] = round(quantity / 100) * 100  # Round to nearest 100 for pills
+        else:
+            matched_row['Cost ($)'] = quantity / 1000 * matched_row['Price / kg']
+            matched_row['Quantity (g)'] = quantity  # No rounding for regular foods
+        
+        # Select columns before column index 98 for calculations
+        numeric_cols_before_98 = matched_row.columns[:98]
+        
+        # Create a DataFrame to store the calculated values for numeric columns before column 100
+        calculated_values = matched_row[numeric_cols_before_98].copy()
+
+        # Only multiply numeric columns
+        for col in calculated_values.columns:
+            if col not in ['Cost ($)', 'Quantities (g)', 'Price / kg'] and pd.api.types.is_numeric_dtype(calculated_values[col]):
+                calculated_values[col] = calculated_values[col] * (quantity / 100)
+        
+        # Select columns from column index 98 onward without modification
+        cols_from_98_onward = matched_row.columns[98:]
+        non_calculated_values = matched_row[cols_from_98_onward]
+        
+        # Concatenate both parts to get the final row for this product
+        final_row = pd.concat([calculated_values, non_calculated_values], axis=1)
+        
+        # Append the final row to the results_calculated DataFrame
+        results_calculated = pd.concat([results_calculated, final_row], axis=0)
+
+    # Reset index for the final results_calculated DataFrame
+    results_calculated.reset_index(drop=True, inplace=True)
+
+    # Calculate the sum for each numeric column and create a final row
+    sum_row = results_calculated.sum(numeric_only=True).to_frame().T
+
+    # Add a label for the sum row (e.g., "Total")
+    sum_row['Product Name'] = 'Total'
+
+    # Append the sum row to the results_calculated DataFrame
+    results_calculated = pd.concat([results_calculated, sum_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print("\nCONSISTING OF THE FOLLOWING FOODS:")
+    for index, row in results_calculated.iterrows():
+        food_name = row['Product Name']
+        if row['is Pill'] == 1:
+            quantity = f"{int(round(row['Quantity (g)'] / 100, 0))} caps"
+        else:
+            quantity = f"{int(row['Quantity (g)'])} g"
+        cost = f"${row['Cost ($)']:.2f}"
+        category = row['Category']
+        print(f"{food_name.ljust(95)}: {quantity.ljust(20)}{cost.ljust(10)}{category}")
+
+    # Define the list of columns to be graphed
+    columns_to_graph = [
+        'Calories', 'Fat (g)', 'Protein (g)', 'Sugars (g)', 'Fiber (g)', 'Cholesterol (mg)', 'Saturated Fats (g)', 
+        'Calcium (mg)', 'Iron, Fe (mg)', 'Potassium, K (mg)', 'Magnesium (mg)', 
+        #'Vitamin A, IU (IU)', 
+        'Vitamin A, RAE (mcg)', 'Vitamin C (mg)', 'Vitamin B-12 (mcg)', 'Vitamin D (mcg)', 
+        'Vitamin E (Alpha-Tocopherol) (mg)', 'Phosphorus, P (mg)', 'Sodium (mg)', 'Zinc, Zn (mg)', 'Copper, Cu (mg)', 
+        'Manganese (mg)', 'Selenium, Se (mcg)', 'Fluoride, F (mcg)', 'Molybdenum (mcg)', 'Chlorine (mg)', 
+        'Thiamin (B1) (mg)', 'Riboflavin (B2) (mg)', 'Niacin (B3) (mg)', 'Pantothenic acid (B5) (mg)', 'Vitamin B6 (mg)', 
+        'Biotin (B7) (mcg)', 'Folate (B9) (mcg)', 'Folic acid (mcg)', 'Food Folate (mcg)', 'Folate DFE (mcg)', 
+        'Choline (mg)', 'Betaine (mg)', 'Retinol (mcg)', 'Carotene, beta (mcg)', 'Carotene, alpha (mcg)', 
+        'Lycopene (mcg)', 'Lutein + Zeaxanthin (mcg)', 'Vitamin D2 (ergocalciferol) (mcg)', 'Vitamin D3 (cholecalciferol) (mcg)', 
+        'Vitamin D (IU) (IU)', 'Vitamin K (mcg)', 'Dihydrophylloquinone (mcg)', 'Menaquinone-4 (mcg)', 
+        '20:5 n-3 (EPA) (mg)', '22:6 n-3 (DHA) (mg)', 'Net Carbs (g)', 'Caffeine (mg)', 'Theobromine (mg)',  'Sugar (g)'
+    ]
+
+    # Extract the last row (totals row) of the results_calculated DataFrame
+    totals_row = results_calculated.iloc[-1]
+
+    # Filter the totals row to get the values for the specified columns
+    totals_values = totals_row[columns_to_graph]
+
+    # Plot the horizontal bar chart
+    plt.figure(figsize=(25, 15))  # Increase the figure size for better readability
+    bars = plt.barh(columns_to_graph, totals_values, color='skyblue', height=0.3)  # Adjust the height to make bars skinnier
+
+    # Add labels to the bars
+    for bar, column_name in zip(bars, columns_to_graph):
+        xval = bar.get_width()
+        plt.text(xval, bar.get_y() + bar.get_height()/2, f'{round(xval, 2)} {column_name}', ha='left', va='center')
+
+    # Add labels and title
+    plt.ylabel('Micronutrients')
+    plt.xlabel('Total Amount')
+    plt.title('Total Amount of Each Micronutrient from Diet Plan')
+
+    # Draw constraint lines and markers
+    constraints = {
+        'Fat (g)': (None,fat_ubound),
+        'Protein (g)': (protein_minimum, None),
+        'Fiber (g)': (fiber_lbound, None),
+        'Net Carbs (g)': (None,net_carb_maximum),
+    }
+
+    for column_name, constraints in constraints.items():
+        if constraints:
+            min_constraint, max_constraint = constraints
+            if min_constraint is not None:
+                plt.scatter(min_constraint, columns_to_graph.index(column_name), color='black', marker='>', s=40, alpha=1)
+            if max_constraint is not None:
+                plt.scatter(max_constraint, columns_to_graph.index(column_name), color='black', marker='<', s=40, alpha=1)
+
+    # Adjust layout to avoid clipping
+    plt.tight_layout()
+
+    # Show plot
+    plt.show()
+
+
+
+    def PlotContributions(*nutrients):
+        # Filter out the 'Total' row
+        results_calculated_filtered = results_calculated[results_calculated['Product Name'] != 'Total']
+        
+        # Calculate total contributions for the selected nutrients
+        total_contributions = {}
+        for nutrient in nutrients:
+            total_contributions[nutrient] = results_calculated_filtered[nutrient].sum()
+            results_calculated_filtered[f'{nutrient} Contribution (%)'] = results_calculated_filtered[nutrient] / total_contributions[nutrient] * 100
+        
+        # Generate unique colors for each food item
+        num_foods = len(results_calculated_filtered)
+        cmap = plt.get_cmap('tab20', num_foods)
+        colors = [cmap(idx % num_foods) for idx in range(num_foods)]
+        
+        # Plotting
+        fig, axs = plt.subplots(len(nutrients), 1, figsize=(25, 2 * len(nutrients)))
+        
+        # Loop through each nutrient and plot its contribution
+        for i, nutrient in enumerate(nutrients):
+            # Sort and plot each food's contribution to the nutrient as a colored segment
+            results_sorted = results_calculated_filtered.sort_values(by=f'{nutrient} Contribution (%)', ascending=False)
+            left_position = 0
+            for idx, row in results_sorted.iterrows():
+                axs[i].barh(nutrient, row[nutrient], left=left_position, color=colors[idx], label=row['Product Name'] if pd.notna(row['Product Name']) else None, height=0.2)
+                left_position += row[nutrient]
+            
+            # Set x-axis limits and labels for the nutrient plot
+            axs[i].set_xlim(0, total_contributions[nutrient])
+            axs[i].text(total_contributions[nutrient] * 1.005 , nutrient, f'{round(total_contributions[nutrient])}', va='center', ha='left')
+        
+        # Adding legend to the first subplot
+        handles, labels = axs[0].get_legend_handles_labels()
+        filtered_labels = [label for label in labels if label and label != 'Total' and label != 'None']
+        fig.legend(handles, filtered_labels, loc='lower left', bbox_to_anchor=(-0.25, 1), frameon=True)
+        
+        # Adjust layout to ensure proper spacing
+        plt.tight_layout(rect=[0, 0, 1.5, 1])
+        plt.subplots_adjust(hspace=0.5)
+        
+        # Show plot
+        plt.show()
+        
+        return fig
+
+
+
+    # Example usage:
+    #PlotContributions('Protein (g)', 'Calories', 'Fat (g)', 'Net Carbs (g)')
+
+    PlotContributions('Calories', 'Protein (g)', 'Net Carbs (g)','Fat (g)', 'Fiber (g)', 'Sugars (g)', 'Saturated Fats (g)')
+
+    PlotContributions('Calcium (mg)', 'Iron, Fe (mg)', 'Niacin (B3) (mg)', 'Carotene, beta (mcg)', 'Carotene, alpha (mcg)', 'Lycopene (mcg)', 'Lutein + Zeaxanthin (mcg)','Potassium, K (mg)', 'Magnesium (mg)', 'Vitamin C (mg)', 'Vitamin E (Alpha-Tocopherol) (mg)', 'Zinc, Zn (mg)', 'Manganese (mg)')
+
+
+
+
+
+
+##### MAINTENANCE MODEL BELOW
+
 
     
 # Function to set up and solve the maintenance model for a given athlete
@@ -808,4 +996,230 @@ def solve_maintenance_model(athlete_name, file_path='FoodDatabase.csv'):
             print(f"{name_with_spaces.ljust(55)}\t{lhs_value_rounded}\t{operator}\t{rhs_value_rounded}")
 
 
-    
+    # Create a new DataFrame to store the calculated values
+    results_calculated = pd.DataFrame()
+
+    # Loop through the results list and perform the calculations
+    for result in results_list:
+        product_name = result['Food Name']
+        quantity = result['Quantity (g)']
+        
+        # Find the corresponding row in df_filtered
+        matched_row = df_filtered[df_filtered['Product Name'] == product_name].copy()
+        
+        # Calculate 'Cost ($)'
+        if matched_row['is Pill'].values[0] == 1:
+            matched_row['Cost ($)'] = (quantity / 100) * matched_row['Price / kg']
+            matched_row['Quantity (g)'] = round(quantity / 100) * 100  # Round to nearest 100 for pills
+        else:
+            matched_row['Cost ($)'] = quantity / 1000 * matched_row['Price / kg']
+            matched_row['Quantity (g)'] = quantity  # No rounding for regular foods
+        
+        # Select columns before column index 98 for calculations
+        numeric_cols_before_98 = matched_row.columns[:98]
+        
+        # Create a DataFrame to store the calculated values for numeric columns before column 100
+        calculated_values = matched_row[numeric_cols_before_98].copy()
+
+        # Only multiply numeric columns
+        for col in calculated_values.columns:
+            if col not in ['Cost ($)', 'Quantities (g)', 'Price / kg'] and pd.api.types.is_numeric_dtype(calculated_values[col]):
+                calculated_values[col] = calculated_values[col] * (quantity / 100)
+        
+        # Select columns from column index 98 onward without modification
+        cols_from_98_onward = matched_row.columns[98:]
+        non_calculated_values = matched_row[cols_from_98_onward]
+        
+        # Concatenate both parts to get the final row for this product
+        final_row = pd.concat([calculated_values, non_calculated_values], axis=1)
+        
+        # Append the final row to the results_calculated DataFrame
+        results_calculated = pd.concat([results_calculated, final_row], axis=0)
+
+    # Reset index for the final results_calculated DataFrame
+    results_calculated.reset_index(drop=True, inplace=True)
+
+    # Calculate the sum for each numeric column and create a final row
+    sum_row = results_calculated.sum(numeric_only=True).to_frame().T
+
+    # Add a label for the sum row (e.g., "Total")
+    sum_row['Product Name'] = 'Total'
+
+    # Append the sum row to the results_calculated DataFrame
+    results_calculated = pd.concat([results_calculated, sum_row], ignore_index=True)
+
+    # Display the results DataFrame
+    print("\nCONSISTING OF THE FOLLOWING FOODS:")
+    for index, row in results_calculated.iterrows():
+        food_name = row['Product Name']
+        if row['is Pill'] == 1:
+            quantity = f"{int(round(row['Quantity (g)'] / 100, 0))} caps"
+        else:
+            quantity = f"{int(row['Quantity (g)'])} g"
+        cost = f"${row['Cost ($)']:.2f}"
+        category = row['Category']
+        print(f"{food_name.ljust(95)}: {quantity.ljust(20)}{cost.ljust(10)}{category}")
+
+
+        # Define the list of columns to be graphed
+    columns_to_graph = [
+        'Calories', 'Fat (g)', 'Protein (g)', 'Sugars (g)', 'Fiber (g)', 'Cholesterol (mg)', 'Saturated Fats (g)', 
+        'Calcium (mg)', 'Iron, Fe (mg)', 'Potassium, K (mg)', 'Magnesium (mg)', 
+        #'Vitamin A, IU (IU)', 
+        'Vitamin A, RAE (mcg)', 'Vitamin C (mg)', 'Vitamin B-12 (mcg)', 'Vitamin D (mcg)', 
+        'Vitamin E (Alpha-Tocopherol) (mg)', 'Phosphorus, P (mg)', 'Sodium (mg)', 'Zinc, Zn (mg)', 'Copper, Cu (mg)', 
+        'Manganese (mg)', 'Selenium, Se (mcg)', 'Fluoride, F (mcg)', 'Molybdenum (mcg)', 'Chlorine (mg)', 
+        'Thiamin (B1) (mg)', 'Riboflavin (B2) (mg)', 'Niacin (B3) (mg)', 'Pantothenic acid (B5) (mg)', 'Vitamin B6 (mg)', 
+        'Biotin (B7) (mcg)', 'Folate (B9) (mcg)', 'Folic acid (mcg)', 'Food Folate (mcg)', 'Folate DFE (mcg)', 
+        'Choline (mg)', 'Betaine (mg)', 'Retinol (mcg)', 'Carotene, beta (mcg)', 'Carotene, alpha (mcg)', 
+        'Lycopene (mcg)', 'Lutein + Zeaxanthin (mcg)', 'Vitamin D2 (ergocalciferol) (mcg)', 'Vitamin D3 (cholecalciferol) (mcg)', 
+        'Vitamin D (IU) (IU)', 'Vitamin K (mcg)', 'Dihydrophylloquinone (mcg)', 'Menaquinone-4 (mcg)', 
+        '20:5 n-3 (EPA) (mg)', '22:6 n-3 (DHA) (mg)', 'Net Carbs (g)', 'Caffeine (mg)', 'Theobromine (mg)',  'Sugar (g)'
+    ]
+
+    # Extract the last row (totals row) of the results_calculated DataFrame
+    totals_row = results_calculated.iloc[-1]
+
+    # Filter the totals row to get the values for the specified columns
+    totals_values = totals_row[columns_to_graph]
+
+    # Plot the horizontal bar chart
+    plt.figure(figsize=(25, 15))  # Increase the figure size for better readability
+    bars = plt.barh(columns_to_graph, totals_values, color='skyblue', height=0.3)  # Adjust the height to make bars skinnier
+
+    # Add labels to the bars
+    for bar, column_name in zip(bars, columns_to_graph):
+        xval = bar.get_width()
+        plt.text(xval, bar.get_y() + bar.get_height()/2, f'{round(xval, 2)} {column_name}', ha='left', va='center')
+
+    # Add labels and title
+    plt.ylabel('Micronutrients')
+    plt.xlabel('Total Amount')
+    plt.title('Total Amount of Each Micronutrient from Diet Plan')
+
+    # Draw constraint lines and markers
+    constraints = {
+        'Calories': None,
+        'Fat (g)': ( fat_lbound,fat_ubound),
+        'Protein (g)': (protein_minimum, None),
+        'Sugars (g)': (None, sugar_maximum),
+        'Fiber (g)': (fiber_lbound, fiber_ubound),
+        'Cholesterol (mg)': None,
+        'Saturated Fats (g)': (None, sat_fat_maximum),
+        'Calcium (mg)': (calcium_lbound, calcium_ubound),
+        'Iron, Fe (mg)': (iron_lbound, iron_ubound),
+        'Potassium, K (mg)': (None, potassium_maximum),
+        'Magnesium (mg)': (magnesium_lbound, magnesium_ubound),
+        'Vitamin A, IU (IU)': None,
+        'Vitamin A, RAE (mcg)': None,
+        'Vitamin C (mg)': (vitaminC_lbound, vitaminC_ubound),
+        'Vitamin B-12 (mcg)': None,
+        'Vitamin D (mcg)': None,
+        'Vitamin E (Alpha-Tocopherol) (mg)': (vitaminE_minimum, None),
+        'Phosphorus, P (mg)': None,
+        'Sodium (mg)': None,
+        'Zinc, Zn (mg)': (zinc_lbound, zinc_ubound),
+        'Copper, Cu (mg)': None,
+        'Manganese (mg)': (manganese_lbound, manganese_ubound),
+        'Selenium, Se (mcg)': None,
+        'Fluoride, F (mcg)': None,
+        'Molybdenum (mcg)': None,
+        'Chlorine (mg)': None,
+        'Thiamin (B1) (mg)': None,
+        'Riboflavin (B2) (mg)': None,
+        'Niacin (B3) (mg)': (niacin_minimum, None),
+        'Pantothenic acid (B5) (mg)': None,
+        'Vitamin B6 (mg)': None,
+        'Biotin (B7) (mcg)': None,
+        'Folate (B9) (mcg)': None,
+        'Folic acid (mcg)': None,
+        'Food Folate (mcg)': None,
+        'Folate DFE (mcg)': None,
+        'Choline (mg)': None,
+        'Betaine (mg)': None,
+        'Retinol (mcg)': None,
+        'Carotene, beta (mcg)': (beta_carotene_minimum, None),
+        'Carotene, alpha (mcg)': (alpha_carotene_minimum, None),
+        'Lycopene (mcg)': (lycopene_minimum, None),
+        'Lutein + Zeaxanthin (mcg)': (lut_zeaxanthin_minimum, None),
+        'Vitamin D2 (ergocalciferol) (mcg)': None,
+        'Vitamin D3 (cholecalciferol) (mcg)': None,
+        'Vitamin D (IU) (IU)': None,
+        'Vitamin K (mcg)': None,
+        'Dihydrophylloquinone (mcg)': None,
+        'Menaquinone-4 (mcg)': None,
+        '20:5 n-3 (EPA) (mg)': (Fish_Oils_minimum, None),
+        '22:6 n-3 (DHA) (mg)': (Fish_Oils_minimum, None),
+        'Net Carbs (g)': (net_carb_minimum, None),
+        'Caffeine (mg)': None,
+        'Theobromine (mg)': None,
+        'Sugar (g)': (None, sugar_maximum)
+    }
+
+    for column_name, constraints in constraints.items():
+        if constraints:
+            min_constraint, max_constraint = constraints
+            if min_constraint is not None:
+                plt.scatter(min_constraint, columns_to_graph.index(column_name), color='black', marker='>', s=40, alpha=1)
+            if max_constraint is not None:
+                plt.scatter(max_constraint, columns_to_graph.index(column_name), color='black', marker='<', s=40, alpha=1)
+
+    # Adjust layout to avoid clipping
+    plt.tight_layout()
+
+    # Show plot
+    plt.show()
+
+    def PlotContributions(*nutrients):
+        # Filter out the 'Total' row
+        results_calculated_filtered = results_calculated[results_calculated['Product Name'] != 'Total']
+        
+        # Calculate total contributions for the selected nutrients
+        total_contributions = {}
+        for nutrient in nutrients:
+            total_contributions[nutrient] = results_calculated_filtered[nutrient].sum()
+            results_calculated_filtered[f'{nutrient} Contribution (%)'] = results_calculated_filtered[nutrient] / total_contributions[nutrient] * 100
+        
+        # Generate unique colors for each food item
+        num_foods = len(results_calculated_filtered)
+        cmap = plt.get_cmap('tab20', num_foods)
+        colors = [cmap(idx % num_foods) for idx in range(num_foods)]
+        
+        # Plotting
+        fig, axs = plt.subplots(len(nutrients), 1, figsize=(25, 2 * len(nutrients)))
+        
+        # Loop through each nutrient and plot its contribution
+        for i, nutrient in enumerate(nutrients):
+            # Sort and plot each food's contribution to the nutrient as a colored segment
+            results_sorted = results_calculated_filtered.sort_values(by=f'{nutrient} Contribution (%)', ascending=False)
+            left_position = 0
+            for idx, row in results_sorted.iterrows():
+                axs[i].barh(nutrient, row[nutrient], left=left_position, color=colors[idx], label=row['Product Name'] if pd.notna(row['Product Name']) else None, height=0.2)
+                left_position += row[nutrient]
+            
+            # Set x-axis limits and labels for the nutrient plot
+            axs[i].set_xlim(0, total_contributions[nutrient])
+            axs[i].text(total_contributions[nutrient] * 1.005 , nutrient, f'{round(total_contributions[nutrient])}', va='center', ha='left')
+        
+        # Adding legend to the first subplot
+        handles, labels = axs[0].get_legend_handles_labels()
+        filtered_labels = [label for label in labels if label and label != 'Total' and label != 'None']
+        fig.legend(handles, filtered_labels, loc='lower left', bbox_to_anchor=(-0.25, 1), frameon=True)
+        
+        # Adjust layout to ensure proper spacing
+        plt.tight_layout(rect=[0, 0, 1.5, 1])
+        plt.subplots_adjust(hspace=0.5)
+        
+        # Show plot
+        plt.show()
+        
+        return fig
+
+
+
+    # Example usage:
+    #PlotContributions('Protein (g)', 'Calories', 'Fat (g)', 'Net Carbs (g)')
+
+    PlotContributions('Calories', 'Protein (g)', 'Net Carbs (g)','Fat (g)', 'Fiber (g)', 'Sugars (g)', 'Saturated Fats (g)')
+
+    PlotContributions('Calcium (mg)', 'Iron, Fe (mg)', 'Niacin (B3) (mg)', 'Carotene, beta (mcg)', 'Carotene, alpha (mcg)', 'Lycopene (mcg)', 'Lutein + Zeaxanthin (mcg)','Potassium, K (mg)', 'Magnesium (mg)', 'Vitamin C (mg)', 'Vitamin E (Alpha-Tocopherol) (mg)', 'Zinc, Zn (mg)', 'Manganese (mg)')
