@@ -1,10 +1,34 @@
 {
-    "Markos": {
-        "Name": "Markos",
-        "Weight_lbs": 194.0,
-        "BF_Percent": 0.17,
-        "Caloric_Multiplier": 15.1,
-        "Extra_Caloric_Multiplier": 1.0,
-        "extra_PSMF_multiplier": 1.0
+    "temaaaa": {
+        "Name": "temaaaa",
+        "Weight_lbs": 1.99,
+        "Bf_percent": null,
+        "Caloric_multiplier": null,
+        "Extra_caloric_multiplier": null,
+        "Extra_psmf_multiplier": null
+    },
+    "tea": {
+        "Name": "tea",
+        "Weight_lbs": 1.99,
+        "Bf_percent": null,
+        "Caloric_multiplier": null,
+        "Extra_caloric_multiplier": null,
+        "Extra_psmf_multiplier": null
+    },
+    "bob": {
+        "Name": "bob",
+        "Weight_lbs": 1.99,
+        "Bf_percent": 3.0,
+        "Caloric_multiplier": null,
+        "Extra_caloric_multiplier": null,
+        "Extra_psmf_multiplier": null
+    },
+    "chunk": {
+        "Name": "chunk",
+        "Weight_lbs": 5.0,
+        "Bf_percent": 3.0,
+        "Caloric_multiplier": null,
+        "Extra_caloric_multiplier": null,
+        "Extra_psmf_multiplier": null
     }
 }
