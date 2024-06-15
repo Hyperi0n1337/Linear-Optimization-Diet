@@ -46,6 +46,7 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
     #Excel was using Simplex LP method
     
     # Define base class for constraints
+    # TODO: Move to separate file; can be unified into single class instance?
     class Constraint:
         def __init__(self, model, variables, coefficients, name):
             self.model = model
@@ -107,6 +108,9 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
             return values / scale_factor
         return values
 
+    # TODO: It appears solving both models involves creation of dataframe; if
+    # true, check dataframe object __init__ or just make utility fn to prevent dupe
+
     # Index dictionary for human-readable names
     index = {
         "dollars_per_g": (100, 1000),
@@ -141,6 +145,23 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
         "lut_zeaxanthin_per_g": (62, 100),
         "vitaminE_per_g": (22, 100),
     }
+
+    #  TODO: Make nutrient array a dict, then it can be accessed with nutrient_array.get("key")
+    #  this isn't quite as good as giving it a class but I don't see where else it needs
+    #  good accessor methods, inits, or anything else. Example
+    #
+    # def get_nutrient_array(nutrient_type: str) -> Dict[str, Any]: # idk the actual type
+    #     nutrient_array = {}
+    #     if nutrient_type in index:
+    #         col, scale = index[nutrient_type]
+    #         nutrient_array[nutrient_type] = extract_column_array(df_filtered, col, scale)
+    #     else:
+    #         raise ValueError(f"Nutrient type '{nutrient_type}' is not recognized")
+    #     return nutrient_array
+    #
+    #  which would make columns_to_graph out of order but expressable as:
+    #  columns_to_graph = nutrient_array[?:?].keys()
+    #  and presumably a for title in titles title.to_upper()
 
     # Function to get the array for a given nutrient type
     def get_nutrient_array(nutrient_type: str):
@@ -193,8 +214,6 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
     # Objective Function
     maintenance_model += lpSum(x[i] * dollars_per_g[i-1] for i in range(1, len(df_filtered)+1))
 
-    # Defining Constraints
-    # TODO: PULL THESE FROM SOMEWHERE ELSE, MAYBE READ CSV THAT HAS BODYWEIGHT AND OTHER STATS AND COMPUTE THE MAINTENANCE AND OTHER NEEDS BASED ON 
     #Constants (Determinants of variables)
     Weight_lbs = athlete.Weight_lbs
     BF_Percent = athlete.BF_Percent
@@ -202,7 +221,9 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
 
     #For PSMF
 
-    extra_PSMF_multiplier = 1 # extra adjustment factor (in %), normally leave 1
+    # NOTE: Deprecated
+    # extra_PSMF_multiplier = 1 # extra adjustment factor (in %), normally leave 1
+    # NOTE: I wonder if this is a function rather than a lookup, although it doesn't actually matter
     lbm_protein_multiplier_table_for_PSMF = {
         0.01: 2.0,
         0.02: 2.0,
@@ -243,6 +264,7 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
 
 
     protein_minimum = LBM * lbm_protein_multiplier_table_for_PSMF[BF_Percent] * athlete.extra_PSMF_multiplier
+    # REVIEW: Should the athlete's bounds also be part of Athlete()? See Note on athlete_manager.py
     fiber_lbound = 10  # lower bound for fiber
     fat_ubound = 50 #not really necessary, but why not, carbs provide more energy anyway
     net_carb_maximum = 30  # set net carb minimum
@@ -427,6 +449,7 @@ def solve_PSMF_model(athlete_name, file_path='FoodDatabase.csv'):
             matched_row['Quantity (g)'] = quantity  # No rounding for regular foods
         
         # Select columns before column index 98 for calculations
+        # TODO: Magic number
         numeric_cols_before_98 = matched_row.columns[:98]
         
         # Create a DataFrame to store the calculated values for numeric columns before column 100
