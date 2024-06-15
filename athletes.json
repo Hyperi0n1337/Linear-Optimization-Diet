@@ -1,0 +1,10 @@
+{
+    "Markos": {
+        "Name": "Markos",
+        "Weight_lbs": 194.0,
+        "BF_Percent": 0.17,
+        "Caloric_Multiplier": 15.1,
+        "Extra_Caloric_Multiplier": 1.0,
+        "extra_PSMF_multiplier": 1.0
+    }
+}
